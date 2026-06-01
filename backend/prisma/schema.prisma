@@ -1,0 +1,242 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Danh mục nhóm hàng ───────────────────────────────────────────────────
+model NhomHang {
+  id        Int      @id @default(autoincrement())
+  ten       String
+  moTa      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sanPhams PhatTrienSanPham[]
+}
+
+// ─── BST (Bộ sưu tập) ─────────────────────────────────────────────────────
+model BSTCollection {
+  id        Int      @id @default(autoincrement())
+  ten       String
+  nam       Int
+  mua       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  targets  TargetBST[]
+  mauSacs  MauSac[]
+  sanPhams PhatTrienSanPham[]
+}
+
+// ─── Target BST ───────────────────────────────────────────────────────────
+model TargetBST {
+  id               Int           @id @default(autoincrement())
+  bstId            Int
+  bst              BSTCollection @relation(fields: [bstId], references: [id], onDelete: Cascade)
+  khachHangMucTieu String
+  nhuCauSuDung     String
+  nhomHang         String
+  soLuongTarget    Int
+  donGiaDuKien     Float
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  sanPhams PhatTrienSanPham[]
+}
+
+// ─── Màu sắc BST ──────────────────────────────────────────────────────────
+model MauSac {
+  id        Int           @id @default(autoincrement())
+  bstId     Int
+  bst       BSTCollection @relation(fields: [bstId], references: [id], onDelete: Cascade)
+  tenMau    String
+  maHex     String
+  createdAt DateTime      @default(now())
+}
+
+// ─── Phát triển sản phẩm ──────────────────────────────────────────────────
+model PhatTrienSanPham {
+  id          Int        @id @default(autoincrement())
+  bstId       Int
+  bst         BSTCollection @relation(fields: [bstId], references: [id])
+  targetId    Int?
+  target      TargetBST?    @relation(fields: [targetId], references: [id])
+  nhomHangId  Int?
+  nhomHangRef NhomHang?     @relation(fields: [nhomHangId], references: [id])
+  tenSanPham  String
+  nhomHang    String        // text copy for display/compat
+  formDang    String
+  trangThai   String        @default("DANG_PHAT_TRIEN")
+  ghiChu      String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  phases  DevelopmentPhase[]
+  sizes   SizeQuantity[]
+  keHoach KeHoachSanXuat?
+}
+
+model DevelopmentPhase {
+  id          Int              @id @default(autoincrement())
+  sanPhamId   Int
+  sanPham     PhatTrienSanPham @relation(fields: [sanPhamId], references: [id], onDelete: Cascade)
+  soThuTu     Int
+  tenGiaiDoan String
+  ngayBatDau  String?
+  ngayKetThuc String?
+  ghiChu      String?
+  hoanThanh   Boolean          @default(false)
+}
+
+model SizeQuantity {
+  id        Int              @id @default(autoincrement())
+  sanPhamId Int
+  sanPham   PhatTrienSanPham @relation(fields: [sanPhamId], references: [id], onDelete: Cascade)
+  size      String           // S | M | L | XL | XXL | 3XL
+  soLuong   Int              @default(0)
+}
+
+// ─── Nhà cung cấp vật tư ──────────────────────────────────────────────────
+model NhaCungCap {
+  id          Int      @id @default(autoincrement())
+  ten         String
+  maSo        String?
+  diaChi      String?
+  sdt         String?
+  email       String?
+  nguoiLienHe String?
+  ghiChu      String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vatTus    VatTu[]
+  nhapXuats NhapXuatVatTu[]
+}
+
+// ─── Danh mục vật tư ──────────────────────────────────────────────────────
+model VatTu {
+  id           Int         @id @default(autoincrement())
+  ten          String
+  maVatTu      String?     @unique
+  donViTinh    String      // m, kg, cái, cuộn, tờ...
+  nhaCungCapId Int?
+  nhaCungCap   NhaCungCap? @relation(fields: [nhaCungCapId], references: [id])
+  donGia       Float?
+  tonKho       Float       @default(0)
+  tonToiThieu  Float       @default(0)
+  ghiChu       String?
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  chiTietDH VatTuDonHang[]
+  nhapXuats NhapXuatVatTu[]
+}
+
+// ─── Vật tư cấu thành đơn hàng (BOM) ─────────────────────────────────────
+model VatTuDonHang {
+  id          Int            @id @default(autoincrement())
+  keHoachId   Int
+  keHoach     KeHoachSanXuat @relation(fields: [keHoachId], references: [id], onDelete: Cascade)
+  vatTuId     Int
+  vatTu       VatTu          @relation(fields: [vatTuId], references: [id])
+  soLuongCan  Float
+  soLuongDat  Float          @default(0)
+  soLuongNhan Float          @default(0)
+  ghiChu      String?
+}
+
+// ─── Nhập / Xuất / Tồn kho vật tư ────────────────────────────────────────
+model NhapXuatVatTu {
+  id           Int         @id @default(autoincrement())
+  vatTuId      Int
+  vatTu        VatTu       @relation(fields: [vatTuId], references: [id])
+  nhaCungCapId Int?
+  nhaCungCap   NhaCungCap? @relation(fields: [nhaCungCapId], references: [id])
+  loai         String      // NHAP | XUAT | DIEU_CHINH
+  soLuong      Float       // always positive; direction determined by loai
+  donGia       Float?
+  soChungTu    String?
+  lyDo         String?
+  ngayGiaoDich String
+  keHoachId    Int?        // optional link to production order
+  ghiChu       String?
+  createdAt    DateTime    @default(now())
+}
+
+// ─── Nhà máy gia công ─────────────────────────────────────────────────────
+model NhaMay {
+  id        Int      @id @default(autoincrement())
+  ten       String
+  diaChi    String?
+  congSuat  Int
+  ghiChu    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  keHoachs KeHoachSanXuat[]
+}
+
+// ─── Kế hoạch sản xuất ────────────────────────────────────────────────────
+model KeHoachSanXuat {
+  id                Int              @id @default(autoincrement())
+  sanPhamId         Int              @unique
+  sanPham           PhatTrienSanPham @relation(fields: [sanPhamId], references: [id])
+  nhaMayId          Int?
+  nhaMay            NhaMay?          @relation(fields: [nhaMayId], references: [id])
+  trangThai         String           @default("NHAN_SP")
+  phanTramHoanThanh Int              @default(0)
+  ngayGiaoCho       String?
+  ngayNhapKho       String?
+  ghiChu            String?
+  soLuongThucTe     Int?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  phases ProductionPhase[]
+  risks  RiskLog[]
+  vatTus VatTuDonHang[]
+}
+
+model ProductionPhase {
+  id          Int            @id @default(autoincrement())
+  keHoachId   Int
+  keHoach     KeHoachSanXuat @relation(fields: [keHoachId], references: [id], onDelete: Cascade)
+  soThuTu     Int
+  tenGiaiDoan String
+  ngayBatDau  String?
+  ngayKetThuc String?
+  hoanThanh   Boolean        @default(false)
+  ghiChu      String?
+}
+
+model RiskLog {
+  id           Int            @id @default(autoincrement())
+  keHoachId    Int
+  keHoach      KeHoachSanXuat @relation(fields: [keHoachId], references: [id], onDelete: Cascade)
+  moTa         String
+  phuongAn     String?
+  ngayPhatSinh String?
+  daXuLy       Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+}
+
+// ─── Tài khoản người dùng ─────────────────────────────────────────────────
+model TaiKhoan {
+  id          Int      @id @default(autoincrement())
+  tenDangNhap String   @unique
+  matKhau     String   // bcrypt hash
+  hoTen       String
+  email       String?
+  vaiTro      String   @default("QUAN_LY_SP")
+  // ADMIN | QUAN_LY_SP | QUAN_LY_SX
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
