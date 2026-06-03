@@ -17,6 +17,7 @@ model NhomHang {
   updatedAt DateTime @updatedAt
 
   sanPhams PhatTrienSanPham[]
+  vatTus   VatTu[]
 }
 
 // ─── BST (Bộ sưu tập) ─────────────────────────────────────────────────────
@@ -69,7 +70,7 @@ model PhatTrienSanPham {
   nhomHangId  Int?
   nhomHangRef NhomHang?     @relation(fields: [nhomHangId], references: [id])
   tenSanPham  String
-  nhomHang    String        // text copy for display/compat
+  nhomHang    String
   formDang    String
   trangThai   String        @default("DANG_PHAT_TRIEN")
   ghiChu      String?
@@ -77,7 +78,7 @@ model PhatTrienSanPham {
   updatedAt   DateTime   @updatedAt
 
   phases  DevelopmentPhase[]
-  sizes   SizeQuantity[]
+  sizes   SizeQuantity[]      // kept for backward compat, hidden in UI
   keHoach KeHoachSanXuat?
 }
 
@@ -93,11 +94,12 @@ model DevelopmentPhase {
   hoanThanh   Boolean          @default(false)
 }
 
+// SizeQuantity giữ lại cho backward compat (ẩn khỏi UI PTSP)
 model SizeQuantity {
   id        Int              @id @default(autoincrement())
   sanPhamId Int
   sanPham   PhatTrienSanPham @relation(fields: [sanPhamId], references: [id], onDelete: Cascade)
-  size      String           // S | M | L | XL | XXL | 3XL
+  size      String
   soLuong   Int              @default(0)
 }
 
@@ -124,12 +126,15 @@ model VatTu {
   id           Int         @id @default(autoincrement())
   ten          String
   maVatTu      String?     @unique
-  donViTinh    String      // m, kg, cái, cuộn, tờ...
+  donViTinh    String
   nhaCungCapId Int?
   nhaCungCap   NhaCungCap? @relation(fields: [nhaCungCapId], references: [id])
+  nhomHangId   Int?
+  nhomHangRef  NhomHang?   @relation(fields: [nhomHangId], references: [id])
   donGia       Float?
   tonKho       Float       @default(0)
   tonToiThieu  Float       @default(0)
+  hinhAnh      String?     // base64 compressed image
   ghiChu       String?
   active       Boolean     @default(true)
   createdAt    DateTime    @default(now())
@@ -159,13 +164,15 @@ model NhapXuatVatTu {
   vatTu        VatTu       @relation(fields: [vatTuId], references: [id])
   nhaCungCapId Int?
   nhaCungCap   NhaCungCap? @relation(fields: [nhaCungCapId], references: [id])
+  nhaMayId     Int?
+  nhaMay       NhaMay?     @relation(fields: [nhaMayId], references: [id])
   loai         String      // NHAP | XUAT | DIEU_CHINH
-  soLuong      Float       // always positive; direction determined by loai
+  soLuong      Float
   donGia       Float?
   soChungTu    String?
   lyDo         String?
   ngayGiaoDich String
-  keHoachId    Int?        // optional link to production order
+  keHoachId    Int?
   ghiChu       String?
   createdAt    DateTime    @default(now())
 }
@@ -180,7 +187,8 @@ model NhaMay {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  keHoachs KeHoachSanXuat[]
+  keHoachs  KeHoachSanXuat[]
+  nhapXuats NhapXuatVatTu[]
 }
 
 // ─── Kế hoạch sản xuất ────────────────────────────────────────────────────
@@ -196,12 +204,23 @@ model KeHoachSanXuat {
   ngayNhapKho       String?
   ghiChu            String?
   soLuongThucTe     Int?
+  loaiSize          String?          // AO | QUAN — determines size chart
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
   phases ProductionPhase[]
   risks  RiskLog[]
   vatTus VatTuDonHang[]
+  sizes  KHSXSize[]
+}
+
+// ─── Size + số lượng theo kế hoạch SX ────────────────────────────────────
+model KHSXSize {
+  id        Int            @id @default(autoincrement())
+  keHoachId Int
+  keHoach   KeHoachSanXuat @relation(fields: [keHoachId], references: [id], onDelete: Cascade)
+  size      String         // S/M/L/XL/XXL/3XL  hoặc  29/30/.../36
+  soLuong   Int            @default(0)
 }
 
 model ProductionPhase {
@@ -231,11 +250,10 @@ model RiskLog {
 model TaiKhoan {
   id          Int      @id @default(autoincrement())
   tenDangNhap String   @unique
-  matKhau     String   // bcrypt hash
+  matKhau     String
   hoTen       String
   email       String?
   vaiTro      String   @default("QUAN_LY_SP")
-  // ADMIN | QUAN_LY_SP | QUAN_LY_SX
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

@@ -68,7 +68,8 @@ function ProductForm({ bstList, nhomHangList, onSave, onClose, initialData }) {
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--gray-200)', padding: '0 20px', background: 'var(--gray-50)' }}>
-          {[['info','📋 Thông tin'],['timeline','📅 Timeline'],['sizes','📐 Size & SL']].map(([k, label]) => (
+          {/* Sizes đã chuyển sang Kế hoạch SX */}
+          {[['info','📋 Thông tin'],['timeline','📅 Timeline']].map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)} style={{
               padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
               fontWeight: tab === k ? 700 : 400, color: tab === k ? 'var(--primary)' : 'var(--gray-500)',

@@ -9,10 +9,10 @@ const LOAI_LABEL = { NHAP: { label: 'Nhập kho', cls: 'badge-green', icon: '⬇
                      XUAT: { label: 'Xuất kho', cls: 'badge-blue',  icon: '⬆️' },
                      DIEU_CHINH: { label: 'Điều chỉnh', cls: 'badge-yellow', icon: '⚖️' } }
 
-function GiaoDichModal({ vatTuList, nccList, onClose, onDone }) {
+function GiaoDichModal({ vatTuList, nccList, nhaMayList, onClose, onDone }) {
   const [tab, setTab] = useState('NHAP')
   const [form, setForm] = useState({
-    vatTuId: '', nhaCungCapId: '', soLuong: '', donGia: '',
+    vatTuId: '', nhaCungCapId: '', nhaMayId: '', soLuong: '', donGia: '',
     soChungTu: '', lyDo: '', ngayGiaoDich: TODAY, keHoachId: '', ghiChu: '',
     tonKhoMoi: '',
   })
@@ -31,8 +31,12 @@ function GiaoDichModal({ vatTuList, nccList, onClose, onDone }) {
         toastSuccess(`Nhập kho thành công: ${sl} ${vatTuList.find((v) => v.id === Number(form.vatTuId))?.donViTinh || ''}`)
       } else if (tab === 'XUAT') {
         if (!sl || sl <= 0) return toast('Số lượng phải lớn hơn 0', 'info')
-        await api.kho.xuat({ ...form, soLuong: sl })
-        toastSuccess('Xuất kho thành công!')
+        await api.kho.xuat({
+          ...form, soLuong: sl,
+          nhaMayId: form.nhaMayId || undefined,
+        })
+        const nm = nhaMayList.find((n) => n.id === Number(form.nhaMayId))
+        toastSuccess(`Xuất kho thành công${nm ? ' → ' + nm.ten : ''}!`)
       } else {
         if (form.tonKhoMoi === '') return toast('Nhập tồn kho mới', 'info')
         await api.kho.dieuChinh({ vatTuId: form.vatTuId, tonKhoMoi: Number(form.tonKhoMoi),
@@ -105,6 +109,16 @@ function GiaoDichModal({ vatTuList, nccList, onClose, onDone }) {
               </div>
             )}
 
+            {tab === 'XUAT' && (
+              <div className="form-group">
+                <label>🏭 Nhà máy gia công nhận vật tư</label>
+                <select value={form.nhaMayId} onChange={(e) => setF('nhaMayId', e.target.value)}>
+                  <option value="">— Không chọn —</option>
+                  {nhaMayList.map((n) => <option key={n.id} value={n.id}>{n.ten}</option>)}
+                </select>
+              </div>
+            )}
+
             {tab === 'NHAP' && (
               <div className="form-group">
                 <label>Nhà cung cấp</label>
@@ -146,13 +160,14 @@ function GiaoDichModal({ vatTuList, nccList, onClose, onDone }) {
 }
 
 export default function KhoVatTuPage() {
-  const [tonKho, setTonKho]     = useState([])
-  const [giaoDich, setGiaoDich] = useState([])
-  const [vatTuList, setVatTuList] = useState([])
-  const [nccList, setNccList]   = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [showGD, setShowGD]     = useState(false)
-  const [tab, setTab]           = useState('ton-kho')
+  const [tonKho, setTonKho]         = useState([])
+  const [giaoDich, setGiaoDich]     = useState([])
+  const [vatTuList, setVatTuList]   = useState([])
+  const [nccList, setNccList]       = useState([])
+  const [nhaMayList, setNhaMayList] = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [showGD, setShowGD]         = useState(false)
+  const [tab, setTab]               = useState('ton-kho')
   const [filterLoai, setFilterLoai] = useState('')
   const [filterVT, setFilterVT]     = useState('')
 
@@ -161,10 +176,11 @@ export default function KhoVatTuPage() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [tk, gd, vt, ncc] = await Promise.all([
-        api.kho.tonKho(), api.kho.giaoDich(), api.vatTu.list(), api.nhaCungCap.list(),
+      const [tk, gd, vt, ncc, nm] = await Promise.all([
+        api.kho.tonKho(), api.kho.giaoDich(), api.vatTu.list(),
+        api.nhaCungCap.list(), api.nhaMay.list(),
       ])
-      setTonKho(tk); setGiaoDich(gd); setVatTuList(vt); setNccList(ncc)
+      setTonKho(tk); setGiaoDich(gd); setVatTuList(vt); setNccList(ncc); setNhaMayList(nm)
     } catch (e) { toast(e.message) }
     finally { setLoading(false) }
   }
@@ -275,7 +291,7 @@ export default function KhoVatTuPage() {
                     <div className="table-wrap">
                       <table>
                         <thead>
-                          <tr><th>Ngày</th><th>Loại</th><th>Vật tư</th><th>NCC</th>
+                          <tr><th>Ngày</th><th>Loại</th><th>Vật tư</th><th>NCC / Nhà máy</th>
                           <th className="text-right">Số lượng</th><th className="text-right">Đơn giá</th>
                           <th>Số CT</th><th>Lý do</th><th></th></tr>
                         </thead>
@@ -290,7 +306,11 @@ export default function KhoVatTuPage() {
                                   <b style={{ fontSize: 13 }}>{g.vatTu?.ten}</b>
                                   <span className="text-muted text-sm"> ({g.vatTu?.donViTinh})</span>
                                 </td>
-                                <td className="text-sm">{g.nhaCungCap?.ten || '—'}</td>
+                                <td className="text-sm">
+                                  {g.loai === 'XUAT'
+                                    ? (g.nhaMay?.ten ? <span>🏭 {g.nhaMay.ten}</span> : '—')
+                                    : (g.nhaCungCap?.ten || '—')}
+                                </td>
                                 <td className="text-right font-bold">{fmt(g.soLuong)}</td>
                                 <td className="text-right">{g.donGia ? fmt(g.donGia) : '—'}</td>
                                 <td className="text-sm">{g.soChungTu || '—'}</td>
@@ -316,6 +336,7 @@ export default function KhoVatTuPage() {
         <GiaoDichModal
           vatTuList={vatTuList}
           nccList={nccList}
+          nhaMayList={nhaMayList}
           onClose={() => setShowGD(false)}
           onDone={loadAll}
         />

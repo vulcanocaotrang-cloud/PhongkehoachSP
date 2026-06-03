@@ -71,11 +71,12 @@ export const api = {
 
   // ── Vật tư ───────────────────────────────────────────────────────────────
   vatTu: {
-    list:   (p)      => req(`/vat-tu${p ? '?' + new URLSearchParams(p) : ''}`),
-    get:    (id)     => req(`/vat-tu/${id}`),
-    create: (body)   => req('/vat-tu', { method: 'POST', body }),
-    update: (id, b)  => req(`/vat-tu/${id}`, { method: 'PUT', body: b }),
-    remove: (id)     => req(`/vat-tu/${id}`, { method: 'DELETE' }),
+    list:     (p)     => req(`/vat-tu${p ? '?' + new URLSearchParams(p) : ''}`),
+    get:      (id)    => req(`/vat-tu/${id}`),
+    getImage: (id)    => req(`/vat-tu/${id}/hinh-anh`),
+    create:   (body)  => req('/vat-tu', { method: 'POST', body }),
+    update:   (id, b) => req(`/vat-tu/${id}`, { method: 'PUT', body: b }),
+    remove:   (id)    => req(`/vat-tu/${id}`, { method: 'DELETE' }),
   },
 
   // ── Kho vật tư ───────────────────────────────────────────────────────────
@@ -91,6 +92,10 @@ export const api = {
     bomAdd:      (body)  => req('/kho-vat-tu/don-hang',    { method: 'POST', body }),
     bomUpdate:   (id, b) => req(`/kho-vat-tu/don-hang/${id}`, { method: 'PUT', body: b }),
     bomRemove:   (id)    => req(`/kho-vat-tu/don-hang/${id}`, { method: 'DELETE' }),
+    // KHSX Sizes
+    sizeList:    (khId)  => req(`/kho-vat-tu/sizes/${khId}`),
+    sizeInit:    (khId, body) => req(`/kho-vat-tu/sizes/${khId}`, { method: 'POST', body }),
+    sizePatch:   (id, soLuong) => req(`/kho-vat-tu/sizes/item/${id}`, { method: 'PATCH', body: { soLuong } }),
   },
 
   // ── Phát triển SP ────────────────────────────────────────────────────────

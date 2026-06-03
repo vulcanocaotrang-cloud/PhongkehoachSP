@@ -3,6 +3,121 @@ import { api } from '../api'
 import GanttChart from '../components/GanttChart'
 import { toast, toastSuccess } from '../components/Toast'
 
+const SIZES_AO   = ['S', 'M', 'L', 'XL', 'XXL', '3XL']
+const SIZES_QUAN = ['29', '30', '31', '32', '33', '34', '35', '36']
+
+function detectLoai(nhomHang) {
+  if (/quần|pant|jean|short|tây|denim|váy/i.test(nhomHang || '')) return 'QUAN'
+  return 'AO'
+}
+
+// ── Tab quản lý size + số lượng trong KHSX ───────────────────────────────
+function SizesTab({ keHoach }) {
+  const [loaiSize, setLoaiSize] = useState(keHoach.loaiSize || detectLoai(keHoach.sanPham?.nhomHang))
+  const [sizes, setSizes]       = useState(keHoach.sizes || [])
+  const [saving, setSaving]     = useState(false)
+  const [inited, setInited]     = useState((keHoach.sizes || []).length > 0)
+
+  const defaultSizes = loaiSize === 'QUAN' ? SIZES_QUAN : SIZES_AO
+
+  async function initSizes() {
+    setSaving(true)
+    try {
+      const res = await api.kho.sizeInit(keHoach.id, { loaiSize, nhomHang: keHoach.sanPham?.nhomHang })
+      setSizes(res.sizes); setLoaiSize(res.loaiSize); setInited(true)
+      toastSuccess('Đã khởi tạo bảng size!')
+    } catch (e) { toast(e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function changeSizeType(newLoai) {
+    if (!confirm(`Đổi loại size sang ${newLoai === 'QUAN' ? 'Quần (29-36)' : 'Áo (S-3XL)'}? Số liệu cũ sẽ bị xoá.`)) return
+    setLoaiSize(newLoai)
+    setSaving(true)
+    try {
+      const res = await api.kho.sizeInit(keHoach.id, { loaiSize: newLoai })
+      setSizes(res.sizes); setInited(true)
+    } catch (e) { toast(e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function updateQty(sizeItem, val) {
+    const sl = Number(val) || 0
+    setSizes((prev) => prev.map((s) => s.id === sizeItem.id ? { ...s, soLuong: sl } : s))
+    try { await api.kho.sizePatch(sizeItem.id, sl) }
+    catch (e) { toast(e.message) }
+  }
+
+  const total = sizes.reduce((s, sz) => s + (sz.soLuong || 0), 0)
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex-between mb-16" style={{ marginBottom: 16 }}>
+        <div>
+          <span style={{ fontWeight: 600, fontSize: 13 }}>Loại size: </span>
+          <span className={`badge ${loaiSize === 'QUAN' ? 'badge-blue' : 'badge-green'}`}>
+            {loaiSize === 'QUAN' ? '👖 Quần (29–36)' : '👕 Áo (S–3XL)'}
+          </span>
+        </div>
+        <div className="flex-row gap-8">
+          <button className="btn btn-secondary btn-sm" onClick={() => changeSizeType(loaiSize === 'QUAN' ? 'AO' : 'QUAN')} disabled={saving}>
+            🔄 Đổi loại size
+          </button>
+          {!inited && (
+            <button className="btn btn-primary btn-sm" onClick={initSizes} disabled={saving}>
+              {saving ? '⏳...' : '+ Khởi tạo bảng size'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!inited ? (
+        <div className="alert alert-warning">
+          <span>ℹ️</span>
+          <span>Nhấn <b>"Khởi tạo bảng size"</b> để tạo bảng nhập số lượng theo size.</span>
+        </div>
+      ) : (
+        <>
+          <div className="sizes-grid">
+            {sizes.map((s) => (
+              <div key={s.id} className="size-box">
+                <div className="size-label">{s.size}</div>
+                <input
+                  type="number" min="0"
+                  value={s.soLuong}
+                  onChange={(e) => updateQty(s, e.target.value)}
+                  onBlur={(e)  => updateQty(s, e.target.value)}
+                  style={{ textAlign: 'center', fontWeight: 700, fontSize: 16, padding: 4 }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Tổng + phân phối % */}
+          {total > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div className="flex-between" style={{ marginBottom: 8 }}>
+                <span style={{ fontWeight: 600 }}>Tổng: {total.toLocaleString()} SP</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {sizes.filter((s) => s.soLuong > 0).map((s) => (
+                  <span key={s.id} className="badge badge-blue">
+                    {s.size}: {s.soLuong.toLocaleString()}
+                    <span className="text-muted" style={{ marginLeft: 4 }}>
+                      ({Math.round((s.soLuong / total) * 100)}%)
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 const TRANG_THAI_SX = {
   NHAN_SP:       { label: 'Nhận SP',          cls: 'badge-gray',   step: 1 },
   LAP_KE_HOACH:  { label: 'Lập kế hoạch',     cls: 'badge-blue',   step: 2 },
@@ -138,7 +253,7 @@ function DetailModal({ keHoach, nhaMayList, onClose, onSave }) {
           </div>
 
           <div style={{ display: 'flex', borderBottom: '1px solid var(--gray-200)', padding: '0 20px', background: 'var(--gray-50)' }}>
-            {[['info','📋 Kế hoạch'],['timeline','📅 Timeline'],['gantt','📊 Gantt']].map(([k, label]) => (
+            {[['info','📋 Kế hoạch'],['sizes','📐 Size & SL'],['timeline','📅 Timeline'],['gantt','📊 Gantt']].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} style={{
                 padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
                 fontWeight: tab === k ? 700 : 400, color: tab === k ? 'var(--primary)' : 'var(--gray-500)',
@@ -230,6 +345,8 @@ function DetailModal({ keHoach, nhaMayList, onClose, onSave }) {
                 </tbody>
               </table>
             )}
+
+            {tab === 'sizes' && <SizesTab keHoach={keHoach} />}
 
             {tab === 'gantt' && <GanttChart phases={form.phases} />}
           </div>

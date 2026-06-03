@@ -18,8 +18,8 @@ const app  = express()
 const PORT = process.env.PORT || 3001
 const HOST = process.env.HOST || '0.0.0.0'   // bind to all interfaces → accessible by IP
 
-app.use(cors({ origin: '*' }))               // allow all origins for LAN access
-app.use(express.json())
+app.use(cors({ origin: '*' }))
+app.use(express.json({ limit: '15mb' }))     // allow base64 images in body
 
 // Health check
 app.get('/health',     (_req, res) => res.json({ status: 'ok', time: new Date() }))

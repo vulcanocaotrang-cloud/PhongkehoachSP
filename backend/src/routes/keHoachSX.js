@@ -26,12 +26,12 @@ router.get('/', async (req, res) => {
       sanPham: {
         include: {
           bst: { select: { ten: true, nam: true, mua: true } },
-          sizes: true,
         },
       },
       nhaMay: { select: { ten: true, congSuat: true } },
       phases: { orderBy: { soThuTu: 'asc' } },
-      risks: { orderBy: { createdAt: 'desc' } },
+      risks:  { orderBy: { createdAt: 'desc' } },
+      sizes:  { orderBy: { id: 'asc' } },
     },
     orderBy: { updatedAt: 'desc' },
   })
@@ -43,10 +43,11 @@ router.get('/:id', async (req, res) => {
   const item = await prisma.keHoachSanXuat.findUnique({
     where: { id: Number(req.params.id) },
     include: {
-      sanPham: { include: { bst: true, sizes: true, phases: { orderBy: { soThuTu: 'asc' } } } },
-      nhaMay: true,
-      phases: { orderBy: { soThuTu: 'asc' } },
-      risks: { orderBy: { createdAt: 'desc' } },
+      sanPham: { include: { bst: true, phases: { orderBy: { soThuTu: 'asc' } } } },
+      nhaMay:  true,
+      phases:  { orderBy: { soThuTu: 'asc' } },
+      risks:   { orderBy: { createdAt: 'desc' } },
+      sizes:   { orderBy: { id: 'asc' } },
     },
   })
   if (!item) return res.status(404).json({ error: 'Không tìm thấy kế hoạch' })

@@ -71,7 +71,7 @@ router.post('/nhap', async (req, res) => {
 
 // POST xuất kho
 router.post('/xuat', async (req, res) => {
-  const { vatTuId, soLuong, lyDo, ngayGiaoDich, keHoachId, ghiChu } = req.body
+  const { vatTuId, soLuong, lyDo, ngayGiaoDich, keHoachId, nhaMayId, ghiChu } = req.body
   if (!vatTuId || !soLuong || soLuong <= 0)
     return res.status(400).json({ error: 'Thiếu vật tư hoặc số lượng không hợp lệ' })
 
@@ -83,9 +83,10 @@ router.post('/xuat', async (req, res) => {
   const [giaoDich] = await prisma.$transaction([
     prisma.nhapXuatVatTu.create({
       data: {
-        vatTuId: Number(vatTuId),
-        loai: 'XUAT',
-        soLuong: Number(soLuong),
+        vatTuId:   Number(vatTuId),
+        nhaMayId:  nhaMayId ? Number(nhaMayId) : null,
+        loai:      'XUAT',
+        soLuong:   Number(soLuong),
         lyDo,
         ngayGiaoDich: ngayGiaoDich || new Date().toISOString().split('T')[0],
         keHoachId: keHoachId ? Number(keHoachId) : null,
@@ -196,6 +197,64 @@ router.put('/don-hang/:id', async (req, res) => {
 router.delete('/don-hang/:id', async (req, res) => {
   await prisma.vatTuDonHang.delete({ where: { id: Number(req.params.id) } })
   res.status(204).send()
+})
+
+// ── KHSX Sizes ────────────────────────────────────────────────────────────
+const SIZES_AO   = ['S', 'M', 'L', 'XL', 'XXL', '3XL']
+const SIZES_QUAN = ['29', '30', '31', '32', '33', '34', '35', '36']
+
+function detectLoaiSize(nhomHang) {
+  const h = (nhomHang || '').toLowerCase()
+  if (/quần|pant|jean|short|tây|denim|váy/.test(h)) return 'QUAN'
+  return 'AO'
+}
+
+// GET sizes of a production plan
+router.get('/sizes/:keHoachId', async (req, res) => {
+  const sizes = await prisma.kHSXSize.findMany({
+    where: { keHoachId: Number(req.params.keHoachId) },
+    orderBy: { id: 'asc' },
+  })
+  res.json(sizes)
+})
+
+// POST init or replace all sizes for a production plan
+router.post('/sizes/:keHoachId', async (req, res) => {
+  const id = Number(req.params.keHoachId)
+  const { loaiSize, sizes, nhomHang } = req.body
+
+  const resolvedLoai = loaiSize || detectLoaiSize(nhomHang)
+  const defaultSizes = resolvedLoai === 'QUAN' ? SIZES_QUAN : SIZES_AO
+
+  // Build the sizes array
+  const toCreate = (sizes && sizes.length
+    ? sizes
+    : defaultSizes.map((s) => ({ size: s, soLuong: 0 }))
+  ).map((s) => ({ size: s.size, soLuong: Number(s.soLuong) || 0 }))
+
+  // Delete existing and recreate
+  await prisma.$transaction([
+    prisma.kHSXSize.deleteMany({ where: { keHoachId: id } }),
+    prisma.keHoachSanXuat.update({
+      where: { id },
+      data: {
+        loaiSize: resolvedLoai,
+        sizes: { create: toCreate },
+      },
+    }),
+  ])
+
+  const updated = await prisma.kHSXSize.findMany({ where: { keHoachId: id }, orderBy: { id: 'asc' } })
+  res.json({ loaiSize: resolvedLoai, sizes: updated })
+})
+
+// PATCH update single size quantity
+router.patch('/sizes/item/:id', async (req, res) => {
+  const item = await prisma.kHSXSize.update({
+    where: { id: Number(req.params.id) },
+    data: { soLuong: Number(req.body.soLuong) || 0 },
+  })
+  res.json(item)
 })
 
 module.exports = router
