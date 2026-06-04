@@ -5,6 +5,7 @@ async function req(path, opts = {}) {
   try {
     res = await fetch(`${BASE}${path}`, {
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',   // tắt browser cache — đảm bảo GET luôn lấy dữ liệu mới nhất
       ...opts,
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     })

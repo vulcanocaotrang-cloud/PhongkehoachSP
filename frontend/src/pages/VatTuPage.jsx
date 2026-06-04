@@ -183,24 +183,56 @@ export default function VatTuPage() {
     try {
       if (editing) {
         const res = await api.vatTu.update(editing.id, form)
-        // Thông báo nếu tồn kho được điều chỉnh
-        if (res?._dieuChinh) {
-          toastSuccess(`Đã cập nhật! Tồn kho: ${res._dieuChinh.old} → ${res._dieuChinh.new} (đã ghi phiếu ĐC)`)
+
+        // ── Cập nhật ngay vào list state từ response — không đợi load() ──
+        const { _dieuChinh, ...updatedFields } = res || {}
+        setList(prev => prev.map(v =>
+          v.id === editing.id
+            ? {
+                ...v,
+                ten:          updatedFields.ten          ?? v.ten,
+                maVatTu:      updatedFields.maVatTu      ?? v.maVatTu,
+                donViTinh:    updatedFields.donViTinh    ?? v.donViTinh,
+                donGia:       updatedFields.donGia       ?? v.donGia,
+                tonKho:       updatedFields.tonKho       ?? v.tonKho,
+                tonToiThieu:  updatedFields.tonToiThieu  ?? v.tonToiThieu,
+                nhaCungCapId: updatedFields.nhaCungCapId ?? v.nhaCungCapId,
+                nhomHangId:   updatedFields.nhomHangId   ?? v.nhomHangId,
+                nhaCungCap:   updatedFields.nhaCungCap   ?? v.nhaCungCap,
+                nhomHangRef:  updatedFields.nhomHangRef  ?? v.nhomHangRef,
+                ghiChu:       updatedFields.ghiChu       ?? v.ghiChu,
+                hasImage:     updatedFields.hasImage     ?? v.hasImage,
+              }
+            : v
+        ))
+
+        if (_dieuChinh) {
+          toastSuccess(`Đã cập nhật! Tồn kho: ${_dieuChinh.old} → ${_dieuChinh.new} (đã ghi phiếu ĐC)`)
         } else {
           toastSuccess('Đã cập nhật vật tư!')
         }
       } else {
-        await api.vatTu.create(form)
-        toastSuccess('Đã thêm vật tư!')
+        const created = await api.vatTu.create(form)
+        // Thêm item mới vào đầu list
+        if (created) setList(prev => [created, ...prev])
+        toastSuccess('Đã thêm vật tư mới!')
       }
-      setShowForm(false); await load()
+      setShowForm(false)
+
+      // Load lại trong nền để đồng bộ hoàn toàn (không block UI)
+      load()
     } catch (e) { toast(e.message) }
     finally { setSaving(false) }
   }
 
   async function remove(id) {
     if (!confirm('Xoá vật tư này?')) return
-    try { await api.vatTu.remove(id); toastSuccess('Đã xoá'); await load() }
+    try {
+      await api.vatTu.remove(id)
+      setList(prev => prev.filter(v => v.id !== id))   // xoá khỏi state ngay
+      toastSuccess('Đã xoá vật tư')
+      load()                                            // đồng bộ nền
+    }
     catch (e) { toast(e.message) }
   }
 
