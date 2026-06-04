@@ -80,8 +80,19 @@ router.post('/', async (req, res) => {
 })
 
 router.put('/:id', async (req, res) => {
-  const { ten, maVatTu, donViTinh, nhaCungCapId, nhomHangId, donGia, tonToiThieu, hinhAnh, ghiChu, active } = req.body
+  const { ten, maVatTu, donViTinh, nhaCungCapId, nhomHangId, donGia,
+          tonKho, lyDoCapNhat, tonToiThieu, hinhAnh, ghiChu, active } = req.body
   try {
+    // Nếu tonKho được cung cấp, kiểm tra xem có thay đổi không → tạo phiếu điều chỉnh
+    let dieuChinhTonKho = null
+    if (tonKho !== undefined && tonKho !== null) {
+      const current = await prisma.vatTu.findUnique({ where: { id: Number(req.params.id) }, select: { tonKho: true } })
+      const tonKhoMoi = Number(tonKho)
+      if (current && Math.abs(current.tonKho - tonKhoMoi) > 0.0001) {
+        dieuChinhTonKho = { old: current.tonKho, new: tonKhoMoi }
+      }
+    }
+
     const item = await prisma.vatTu.update({
       where: { id: Number(req.params.id) },
       data: {
@@ -91,6 +102,8 @@ router.put('/:id', async (req, res) => {
         ...(nhaCungCapId !== undefined && { nhaCungCapId: nhaCungCapId ? Number(nhaCungCapId) : null }),
         ...(nhomHangId   !== undefined && { nhomHangId:   nhomHangId   ? Number(nhomHangId)   : null }),
         ...(donGia    != null && { donGia: Number(donGia) }),
+        // Cập nhật tonKho trực tiếp nếu được cung cấp
+        ...(tonKho !== undefined && tonKho !== null && { tonKho: Number(tonKho) }),
         ...(tonToiThieu != null && { tonToiThieu: Number(tonToiThieu) }),
         ...(hinhAnh   !== undefined && { hinhAnh: hinhAnh || null }),
         ...(ghiChu    !== undefined && { ghiChu }),
@@ -101,7 +114,27 @@ router.put('/:id', async (req, res) => {
         nhomHangRef: { select: { ten: true } },
       },
     })
-    res.json({ ...item, hasImage: !!item.hinhAnh, hinhAnh: undefined })
+
+    // Ghi log điều chỉnh tồn kho nếu có thay đổi
+    if (dieuChinhTonKho) {
+      await prisma.nhapXuatVatTu.create({
+        data: {
+          vatTuId:      item.id,
+          loai:         'DIEU_CHINH',
+          soLuong:      Math.abs(dieuChinhTonKho.new - dieuChinhTonKho.old),
+          lyDo:         lyDoCapNhat || `Cập nhật tồn đầu: ${dieuChinhTonKho.old} → ${dieuChinhTonKho.new}`,
+          ngayGiaoDich: new Date().toISOString().split('T')[0],
+          ghiChu:       `Điều chỉnh qua form danh mục vật tư`,
+        },
+      })
+    }
+
+    res.json({
+      ...item,
+      hasImage: !!item.hinhAnh,
+      hinhAnh: undefined,
+      _dieuChinh: dieuChinhTonKho,   // trả về để frontend biết có điều chỉnh
+    })
   } catch (e) {
     if (e.code === 'P2025') return res.status(404).json({ error: 'Không tìm thấy' })
     if (e.code === 'P2002') return res.status(409).json({ error: 'Mã vật tư đã tồn tại' })

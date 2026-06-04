@@ -3,7 +3,7 @@ import { api } from '../api'
 import { toast, toastSuccess } from '../components/Toast'
 
 const DVT_OPTS = ['m', 'kg', 'g', 'cái', 'cuộn', 'tờ', 'hộp', 'thùng', 'lít', 'bộ']
-const EMPTY = { ten: '', maVatTu: '', donViTinh: '', nhaCungCapId: '', nhomHangId: '', donGia: '', tonKho: '0', tonToiThieu: '0', hinhAnh: null, ghiChu: '' }
+const EMPTY = { ten: '', maVatTu: '', donViTinh: '', nhaCungCapId: '', nhomHangId: '', donGia: '', tonKho: '0', tonToiThieu: '0', hinhAnh: null, ghiChu: '', lyDoCapNhat: '' }
 const fmt = (n) => n != null ? new Intl.NumberFormat('vi-VN').format(n) : '—'
 
 // Compress image client-side before storing as base64
@@ -161,6 +161,7 @@ export default function VatTuPage() {
       nhaCungCapId: item.nhaCungCapId || '', nhomHangId: item.nhomHangId || '',
       donGia: item.donGia ?? '', tonKho: item.tonKho,
       tonToiThieu: item.tonToiThieu, hinhAnh: null, ghiChu: item.ghiChu || '',
+      lyDoCapNhat: '',
     })
     // Load existing image
     if (item.hasImage) {
@@ -180,8 +181,18 @@ export default function VatTuPage() {
     if (!form.ten.trim() || !form.donViTinh.trim()) return toast('Tên và đơn vị tính không được trống', 'info')
     setSaving(true)
     try {
-      if (editing) { await api.vatTu.update(editing.id, form); toastSuccess('Đã cập nhật vật tư!') }
-      else         { await api.vatTu.create(form); toastSuccess('Đã thêm vật tư!') }
+      if (editing) {
+        const res = await api.vatTu.update(editing.id, form)
+        // Thông báo nếu tồn kho được điều chỉnh
+        if (res?._dieuChinh) {
+          toastSuccess(`Đã cập nhật! Tồn kho: ${res._dieuChinh.old} → ${res._dieuChinh.new} (đã ghi phiếu ĐC)`)
+        } else {
+          toastSuccess('Đã cập nhật vật tư!')
+        }
+      } else {
+        await api.vatTu.create(form)
+        toastSuccess('Đã thêm vật tư!')
+      }
       setShowForm(false); await load()
     } catch (e) { toast(e.message) }
     finally { setSaving(false) }
@@ -389,12 +400,56 @@ export default function VatTuPage() {
                   <label>Mức tối thiểu cảnh báo</label>
                   <input type="number" min="0" step="0.1" value={form.tonToiThieu} onChange={(e) => setF('tonToiThieu', e.target.value)} />
                 </div>
-                {!editing && (
-                  <div className="form-group">
-                    <label>Tồn kho ban đầu</label>
-                    <input type="number" min="0" step="0.1" value={form.tonKho} onChange={(e) => setF('tonKho', e.target.value)} />
+
+                {/* ── Tồn kho ─────────────────────────────────────────── */}
+                <div className="form-group span-2" style={{ background: editing ? '#FFF7ED' : 'var(--gray-50)', border: '1px solid', borderColor: editing ? '#FED7AA' : 'var(--gray-200)', borderRadius: 8, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 16 }}>📦</span>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: editing ? '#92400E' : 'var(--gray-700)', margin: 0 }}>
+                      {editing ? 'Cập nhật số lượng tồn kho' : 'Số lượng tồn đầu'}
+                    </label>
+                    {editing && (
+                      <span style={{ fontSize: 11, background: '#FED7AA', color: '#92400E', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
+                        Tồn hiện tại: {editing.tonKho}
+                      </span>
+                    )}
                   </div>
-                )}
+
+                  <div className="form-grid">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: 12 }}>{editing ? 'Số lượng mới' : 'Số lượng tồn ban đầu'}</label>
+                      <input
+                        type="number" min="0" step="0.1"
+                        value={form.tonKho}
+                        onChange={(e) => setF('tonKho', e.target.value)}
+                        style={{ fontWeight: 700, fontSize: 15 }}
+                      />
+                    </div>
+                    {editing && (
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: 12 }}>Lý do điều chỉnh</label>
+                        <input
+                          value={form.lyDoCapNhat}
+                          onChange={(e) => setF('lyDoCapNhat', e.target.value)}
+                          placeholder="VD: Kiểm kê tháng 6, nhập đầu kỳ..."
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {editing && Number(form.tonKho) !== editing.tonKho && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>↳ Sẽ điều chỉnh:</span>
+                      <b>{editing.tonKho}</b>
+                      <span>→</span>
+                      <b style={{ color: Number(form.tonKho) > editing.tonKho ? 'var(--success)' : 'var(--danger)' }}>
+                        {Number(form.tonKho)}
+                      </b>
+                      <span style={{ color: 'var(--gray-500)' }}>(chênh lệch: {Number(form.tonKho) > editing.tonKho ? '+' : ''}{(Number(form.tonKho) - editing.tonKho).toFixed(2)})</span>
+                      <span style={{ marginLeft: 4 }}>· Sẽ ghi phiếu điều chỉnh tự động</span>
+                    </div>
+                  )}
+                </div>
                 <div className="form-group span-2">
                   <label>Ghi chú</label>
                   <textarea value={form.ghiChu} onChange={(e) => setF('ghiChu', e.target.value)}
