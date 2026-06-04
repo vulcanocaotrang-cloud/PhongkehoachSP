@@ -29,41 +29,81 @@ function compressImage(file, maxPx = 400, quality = 0.75) {
   })
 }
 
-function ImageCell({ id, hasImage }) {
-  const [src, setSrc] = useState(null)
+function ImageCell({ id, hasImage, index = 0 }) {
+  const [src, setSrc]   = useState(null)
+  const [loading, setLoading] = useState(false)
   const [show, setShow] = useState(false)
 
-  async function load() {
-    if (src) { setShow(true); return }
-    try {
-      const { hinhAnh } = await api.vatTu.getImage(id)
-      setSrc(hinhAnh)
-      setShow(true)
-    } catch { /* no image */ }
+  // Auto-load khi component mount — stagger nhẹ để không flood cùng lúc
+  useEffect(() => {
+    if (!hasImage) return
+    setLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const { hinhAnh } = await api.vatTu.getImage(id)
+        if (hinhAnh) setSrc(hinhAnh)
+      } catch { /* no image */ }
+      finally { setLoading(false) }
+    }, index * 60)           // stagger 60ms mỗi row
+    return () => clearTimeout(timer)
+  }, [id, hasImage, index])
+
+  if (!hasImage) {
+    return (
+      <div style={{
+        width: 64, height: 64, borderRadius: 8,
+        background: 'var(--gray-100)', border: '1px dashed var(--gray-300)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 22, color: 'var(--gray-300)',
+      }}>📦</div>
+    )
   }
 
-  if (!hasImage) return <span className="text-muted text-sm">—</span>
+  if (loading || !src) {
+    return (
+      <div style={{
+        width: 64, height: 64, borderRadius: 8,
+        background: 'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 1.2s infinite',
+        border: '1px solid var(--gray-200)',
+      }} />
+    )
+  }
+
   return (
     <>
       <img
-        src={src || ''}
+        src={src}
         alt=""
-        onClick={load}
+        onClick={() => setShow(true)}
         style={{
-          width: 40, height: 40, objectFit: 'cover', borderRadius: 6,
-          border: '1px solid var(--gray-200)', cursor: 'pointer',
-          background: src ? 'transparent' : 'var(--gray-100)',
+          width: 64, height: 64, objectFit: 'cover',
+          borderRadius: 8, border: '1px solid var(--gray-200)',
+          cursor: 'zoom-in', display: 'block',
+          boxShadow: '0 1px 4px rgba(0,0,0,.12)',
+          transition: 'transform .15s, box-shadow .15s',
         }}
-        onError={(e) => { e.target.style.display = 'none' }}
+        onMouseEnter={(e) => { e.target.style.transform = 'scale(1.08)'; e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,.2)' }}
+        onMouseLeave={(e) => { e.target.style.transform = 'scale(1)';    e.target.style.boxShadow = '0 1px 4px rgba(0,0,0,.12)' }}
         title="Nhấn để xem ảnh lớn"
       />
       {/* Lightbox */}
-      {show && src && (
+      {show && (
         <div
           onClick={() => setShow(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,.8)',
+            zIndex: 9999, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', cursor: 'zoom-out',
+            animation: 'fadeIn .15s ease',
+          }}
         >
-          <img src={src} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,.6)' }} />
+          <img src={src} alt=""
+            style={{ maxWidth: '88vw', maxHeight: '88vh', borderRadius: 10, boxShadow: '0 12px 60px rgba(0,0,0,.7)' }}
+          />
+          <div style={{ position: 'absolute', top: 16, right: 20, color: 'white', fontSize: 28, cursor: 'pointer', opacity: .7 }}
+            onClick={() => setShow(false)}>✕</div>
         </div>
       )}
     </>
@@ -213,7 +253,7 @@ export default function VatTuPage() {
               <table>
                 <thead>
                   <tr>
-                    <th style={{ width: 52 }}>Ảnh</th>
+                    <th style={{ width: 80 }}>Hình ảnh</th>
                     <th>Mã VT</th><th>Tên vật tư</th><th>Nhóm hàng</th>
                     <th>ĐVT</th><th>Nhà CC</th>
                     <th className="text-right">Đơn giá</th>
@@ -222,13 +262,15 @@ export default function VatTuPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((item) => {
+                  {filtered.map((item, idx) => {
                     const tt = item.tonKho <= 0 ? { cls: 'badge-red', label: '❌ Hết' }
                       : item.tonKho <= item.tonToiThieu ? { cls: 'badge-yellow', label: '⚠️ Sắp hết' }
                       : { cls: 'badge-green', label: '✅ Đủ' }
                     return (
                       <tr key={item.id} className={item.tonKho <= 0 ? 'row-danger' : ''}>
-                        <td><ImageCell id={item.id} hasImage={item.hasImage} /></td>
+                        <td style={{ padding: '6px 10px' }}>
+                          <ImageCell id={item.id} hasImage={item.hasImage} index={idx} />
+                        </td>
                         <td><code style={{ fontSize: 11, color: 'var(--gray-500)' }}>{item.maVatTu || '—'}</code></td>
                         <td><b>{item.ten}</b></td>
                         <td>
